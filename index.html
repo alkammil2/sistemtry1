@@ -42,8 +42,22 @@
                 <p class="mt-1 text-gray-600">Gunakan tapisan di bawah untuk meneroka data.</p>
             </div>
 
+            <!-- Bahagian Score Card -->
+            <div id="score-card-container" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-gray-200">
+                <!-- Card Jumlah Sekolah -->
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow">
+                    <h4 class="font-semibold text-blue-800">Jumlah Sekolah Unik</h4>
+                    <p id="sekolah-count" class="text-3xl font-bold text-blue-900">0</p>
+                </div>
+                <!-- Card Jumlah Panitia -->
+                <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg shadow">
+                    <h4 class="font-semibold text-green-800">Jumlah Panitia Unik</h4>
+                    <p id="panitia-count" class="text-3xl font-bold text-green-900">0</p>
+                </div>
+            </div>
+
             <!-- Bahagian Kawalan Penapisan -->
-            <div id="filter-controls" class="p-6 bg-gray-50 border-b border-gray-200">
+            <div id="filter-controls" class="p-6 bg-gray-50">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Tapis Data</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- Filter untuk PPD -->
@@ -125,6 +139,8 @@
         const backButton = document.getElementById('back-button');
         const nextButton = document.getElementById('next-button');
         const pageInfo = document.getElementById('page-info');
+        const sekolahCountEl = document.getElementById('sekolah-count');
+        const panitiaCountEl = document.getElementById('panitia-count');
 
         let originalData = [];
         let currentFilteredRows = [];
@@ -152,63 +168,102 @@
             sekolahIndex = headers.indexOf('NAMA SEKOLAH');
             panitiaIndex = headers.indexOf('NAMA PANITIA');
             
-            if(ppdIndex === -1) console.warn("Lajur 'PPD' tidak ditemui.");
             if(sekolahIndex === -1) console.warn("Lajur 'NAMA SEKOLAH' tidak ditemui.");
             if(panitiaIndex === -1) console.warn("Lajur 'NAMA PANITIA' tidak ditemui.");
 
-            populateDropdowns();
-            applyFilters(); // Apply initial filters (which is none) and display first page
+            handleFilterChange();
         }
 
-        function populateDropdowns() {
-            const dataRows = originalData.slice(1);
-            const ppdOptions = new Set();
-            const sekolahOptions = new Set();
-            const panitiaOptions = new Set();
-
-            dataRows.forEach(row => {
-                if (ppdIndex !== -1 && row[ppdIndex]) ppdOptions.add(row[ppdIndex]);
-                if (sekolahIndex !== -1 && row[sekolahIndex]) sekolahOptions.add(row[sekolahIndex]);
-                if (panitiaIndex !== -1 && row[panitiaIndex]) panitiaOptions.add(row[panitiaIndex]);
-            });
-
-            populateSelect(ppdFilter, [...ppdOptions].sort());
-            populateSelect(sekolahFilter, [...sekolahOptions].sort());
-            populateSelect(panitiaFilter, [...panitiaOptions].sort());
-        }
-        
-        function populateSelect(selectElement, options) {
-            options.forEach(optionText => {
-                const option = document.createElement('option');
-                option.value = optionText;
-                option.textContent = optionText;
-                selectElement.appendChild(option);
-            });
-        }
-
-        function applyFilters() {
+        function handleFilterChange() {
+            // 1. Dapatkan nilai semasa
             const selectedPPD = ppdFilter.value;
             const selectedSekolah = sekolahFilter.value;
             const selectedPanitia = panitiaFilter.value;
 
-            const dataRows = originalData.slice(1);
+            // 2. Tapis data berdasarkan setiap pilihan
+            let ppdFiltered = originalData.slice(1);
+            if (!selectedPPD.startsWith('Semua')) {
+                ppdFiltered = ppdFiltered.filter(row => row[ppdIndex] === selectedPPD);
+            }
 
-            currentFilteredRows = dataRows.filter(row => {
-                const ppdMatch = (selectedPPD.startsWith('Semua') || ppdIndex === -1) || row[ppdIndex] === selectedPPD;
-                const sekolahMatch = (selectedSekolah.startsWith('Semua') || sekolahIndex === -1) || row[sekolahIndex] === selectedSekolah;
-                const panitiaMatch = (selectedPanitia.startsWith('Semua') || panitiaIndex === -1) || row[panitiaIndex] === selectedPanitia;
-                return ppdMatch && sekolahMatch && panitiaMatch;
-            });
+            let sekolahFiltered = ppdFiltered;
+            if (!selectedSekolah.startsWith('Semua')) {
+                sekolahFiltered = sekolahFiltered.filter(row => row[sekolahIndex] === selectedSekolah);
+            }
             
+            let panitiaFiltered = sekolahFiltered;
+            if (!selectedPanitia.startsWith('Semua')) {
+                panitiaFiltered = panitiaFiltered.filter(row => row[panitiaIndex] === selectedPanitia);
+            }
+            
+            // 3. Kemas kini pilihan dropdown berdasarkan data yang relevan
+            updateDropdownOptions(ppdFiltered, sekolahFiltered, panitiaFiltered);
+
+            // 4. Paparkan data yang ditapis sepenuhnya
+            currentFilteredRows = panitiaFiltered;
+            updateScoreCards(currentFilteredRows);
             currentPage = 1;
             displayCurrentPage();
+        }
+
+        function updateDropdownOptions(ppdFiltered, sekolahFiltered, panitiaFiltered) {
+            const selectedPPD = ppdFilter.value;
+            const selectedSekolah = sekolahFilter.value;
+            const selectedPanitia = panitiaFilter.value;
+
+            // Kemas kini PPD
+            const ppdOptions = new Set(originalData.slice(1).filter(row => 
+                (selectedSekolah.startsWith('Semua') || row[sekolahIndex] === selectedSekolah) &&
+                (selectedPanitia.startsWith('Semua') || row[panitiaIndex] === selectedPanitia)
+            ).map(row => row[ppdIndex]));
+            populateSelect(ppdFilter, [...ppdOptions].sort(), selectedPPD);
+
+            // Kemas kini Sekolah
+            const sekolahOptions = new Set(ppdFiltered.filter(row => 
+                (selectedPanitia.startsWith('Semua') || row[panitiaIndex] === selectedPanitia)
+            ).map(row => row[sekolahIndex]));
+            populateSelect(sekolahFilter, [...sekolahOptions].sort(), selectedSekolah);
+
+            // Kemas kini Panitia
+            const panitiaOptions = new Set(sekolahFiltered.map(row => row[panitiaIndex]));
+            populateSelect(panitiaFilter, [...panitiaOptions].sort(), selectedPanitia);
+        }
+        
+        function populateSelect(selectElement, options, selectedValue) {
+            // Simpan pilihan pertama ("Semua...")
+            const firstOption = selectElement.options[0];
+            selectElement.innerHTML = '';
+            selectElement.appendChild(firstOption);
+
+            options.forEach(optionText => {
+                if(optionText) { // Pastikan tiada pilihan kosong
+                    const option = document.createElement('option');
+                    option.value = optionText;
+                    option.textContent = optionText;
+                    selectElement.appendChild(option);
+                }
+            });
+            selectElement.value = selectedValue;
+        }
+        
+        function updateScoreCards(filteredRows) {
+            const sekolahSet = new Set();
+            const panitiaSet = new Set();
+
+            filteredRows.forEach(row => {
+                if (sekolahIndex !== -1 && row[sekolahIndex]) sekolahSet.add(row[sekolahIndex]);
+                if (panitiaIndex !== -1 && row[panitiaIndex]) panitiaSet.add(row[panitiaIndex]);
+            });
+            
+            sekolahCountEl.textContent = sekolahSet.size;
+            panitiaCountEl.textContent = panitiaSet.size;
         }
 
         function resetFilters() {
             ppdFilter.selectedIndex = 0;
             sekolahFilter.selectedIndex = 0;
             panitiaFilter.selectedIndex = 0;
-            applyFilters();
+            handleFilterChange();
         }
         
         function displayCurrentPage() {
@@ -225,11 +280,10 @@
             noResultsDiv.style.display = 'none';
 
             const startIndex = (currentPage - 1) * rowsPerPage;
-            const endIndex = startIndex + rowsPerPage;
-            const pageRows = currentFilteredRows.slice(startIndex, endIndex);
+            const pageRows = currentFilteredRows.slice(startIndex, startIndex + rowsPerPage);
             
             const pageData = [originalData[0], ...pageRows];
-            populateTable(pageData);
+            populateTable(pageData, startIndex);
             updatePaginationControls();
         }
 
@@ -237,12 +291,12 @@
             const totalRows = currentFilteredRows.length;
             const totalPages = Math.ceil(totalRows / rowsPerPage);
 
-            pageInfo.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+            pageInfo.textContent = `Halaman ${currentPage} dari ${totalPages || 1}`;
             backButton.disabled = currentPage === 1;
-            nextButton.disabled = currentPage === totalPages;
+            nextButton.disabled = currentPage === totalPages || totalPages === 0;
         }
 
-        function populateTable(data) {
+        function populateTable(data, startIndex) {
             const columnsToDisplay = ['PPD', 'NAMA SEKOLAH', 'NAMA PANITIA', 'NAMA KETUA PANITIA', 'NO. TELEFON KETUA PANITIA'];
             
             const thead = dataTable.querySelector('thead');
@@ -256,6 +310,13 @@
             );
 
             const headerRow = document.createElement('tr');
+            
+            const numHeader = document.createElement('th');
+            numHeader.scope = 'col';
+            numHeader.className = 'px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider';
+            numHeader.textContent = 'Bil.';
+            headerRow.appendChild(numHeader);
+
             displayIndices.forEach(index => {
                 if (index !== -1) {
                     const th = document.createElement('th');
@@ -268,9 +329,15 @@
             thead.appendChild(headerRow);
 
             const dataRows = data.slice(1);
-            dataRows.forEach(rowData => {
+            dataRows.forEach((rowData, rowIndex) => {
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
+                
+                const numCell = document.createElement('td');
+                numCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-700 text-center';
+                numCell.textContent = startIndex + rowIndex + 1;
+                tr.appendChild(numCell);
+
                 displayIndices.forEach(index => {
                     if (index !== -1) {
                         const td = document.createElement('td');
@@ -297,9 +364,9 @@
             document.head.appendChild(script);
         }
 
-        ppdFilter.addEventListener('change', applyFilters);
-        sekolahFilter.addEventListener('change', applyFilters);
-        panitiaFilter.addEventListener('change', applyFilters);
+        ppdFilter.addEventListener('change', handleFilterChange);
+        sekolahFilter.addEventListener('change', handleFilterChange);
+        panitiaFilter.addEventListener('change', handleFilterChange);
         resetButton.addEventListener('click', resetFilters);
         
         backButton.addEventListener('click', () => {
